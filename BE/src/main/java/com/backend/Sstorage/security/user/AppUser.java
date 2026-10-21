@@ -1,103 +1,113 @@
 package com.backend.Sstorage.security.user;
 
-import jakarta.persistence.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
+import org.hibernate.annotations.UuidGenerator;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
 import java.util.Collection;
-import java.util.HashSet;
-import java.util.Set;
-import java.util.stream.Collectors;
+import java.util.List;
+import java.util.UUID;
 
 @Entity
-@Table(name = "app_users")
+@Table(name = "users", schema = "public")
 public class AppUser implements UserDetails {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @GeneratedValue
+    @UuidGenerator
+    private UUID id;
 
-    @Column(nullable = false, unique = true, length = 100)
-    private String username;
+    @ManyToOne(fetch = FetchType.EAGER, optional = false)
+    @JoinColumn(name = "role_id", nullable = false)
+    private UserRole role;
 
-    @Column(nullable = false, length = 255)
-    private String password;
+    @Column(name = "dealer_id")
+    private UUID dealerId;
 
-    @Column(nullable = false)
-    private boolean enabled = true;
+    @Column(name = "full_name", nullable = false, length = 150)
+    private String fullName;
 
-    @ElementCollection(fetch = FetchType.EAGER)
-    @CollectionTable(
-        name = "user_roles",
-        joinColumns = @JoinColumn(name = "user_id")
-    )
+    @Column(nullable = false, length = 254)
+    private String email;
+
+    @Column(name = "password_hash", nullable = false, length = 255)
+    private String passwordHash;
+
     @Enumerated(EnumType.STRING)
-    @Column(name = "role_name", nullable = false)
-    private Set<Role> roles = new HashSet<>();
+    @Column(nullable = false, length = 20)
+    private UserStatus status = UserStatus.ACTIVE;
 
-    public AppUser() {
+    protected AppUser() {
     }
 
-    public Long getId() {
+    public AppUser(UserRole role, UUID dealerId, String fullName, String email,
+                   String passwordHash, UserStatus status) {
+        this.role = role;
+        this.dealerId = dealerId;
+        this.fullName = fullName;
+        this.email = email;
+        this.passwordHash = passwordHash;
+        this.status = status;
+    }
+
+    public UUID getId() {
         return id;
     }
 
-    public void setId(Long id) {
-        this.id = id;
+    public UserRole getRole() {
+        return role;
+    }
+
+    public UUID getDealerId() {
+        return dealerId;
+    }
+
+    public String getFullName() {
+        return fullName;
+    }
+
+    public UserStatus getStatus() {
+        return status;
     }
 
     @Override
     public String getUsername() {
-        return username;
-    }
-
-    public void setUsername(String username) {
-        this.username = username;
+        return email;
     }
 
     @Override
     public String getPassword() {
-        return password;
-    }
-
-    public void setPassword(String password) {
-        this.password = password;
-    }
-
-    public Set<Role> getRoles() {
-        return roles;
-    }
-
-    public void setRoles(Set<Role> roles) {
-        this.roles = roles;
-    }
-
-    @Override
-    public boolean isEnabled() {
-        return enabled;
-    }
-
-    public void setEnabled(boolean enabled) {
-        this.enabled = enabled;
+        return passwordHash;
     }
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        return roles.stream()
-                .map(role -> new SimpleGrantedAuthority(
-                        "ROLE_" + role.name()
-                ))
-                .collect(Collectors.toSet());
+        return List.of(new SimpleGrantedAuthority("ROLE_" + role.getCode().name()));
     }
 
     @Override
-    public boolean isAccountNonExpired() {
-        return true;
+    public boolean isEnabled() {
+        return status == UserStatus.ACTIVE;
     }
 
     @Override
     public boolean isAccountNonLocked() {
+        return status != UserStatus.LOCKED;
+    }
+
+    @Override
+    public boolean isAccountNonExpired() {
         return true;
     }
 

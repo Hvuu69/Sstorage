@@ -4,8 +4,10 @@ package com.backend.Sstorage.security.config;
 import com.backend.Sstorage.security.jwt.JwtAuthenticationFilter;
 import com.backend.Sstorage.security.user.CustomUserDetailsService;
 
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.MediaType;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
@@ -106,6 +108,16 @@ public class SecurityConfig {
                 )
             )
 
+            .exceptionHandling(exceptions -> exceptions
+                .authenticationEntryPoint((request, response, exception) -> {
+                    response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                    response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+                    response.getWriter().write(
+                        "{\"message\":\"Yêu cầu cần được xác thực\"}"
+                    );
+                })
+            )
+
             .authenticationProvider(authenticationProvider)
 
             .authorizeHttpRequests(auth -> auth
@@ -121,7 +133,7 @@ public class SecurityConfig {
                     .hasAnyRole("ADMIN", "WAREHOUSE_STAFF")
 
                 .requestMatchers("/api/manager/**")
-                    .hasAnyRole("ADMIN", "MANAGER")
+                    .hasRole("WAREHOUSE_MANAGER")
 
                 .anyRequest().authenticated()
             )

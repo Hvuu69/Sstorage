@@ -15,11 +15,12 @@ public class CustomUserDetailsService implements UserDetailsService {
     }
 
     @Override
-    public UserDetails loadUserByUsername(String username) {
-        return userRepository.findByUsername(username)
+    public UserDetails loadUserByUsername(String email) {
+        String normalizedEmail = email == null ? "" : email.trim();
+        return userRepository.findByEmailIgnoreCase(normalizedEmail)
                 .orElseThrow(() ->
                     new UsernameNotFoundException(
-                        "Không tìm thấy tài khoản: " + username
+                        "Không tìm thấy tài khoản."
                     )
                 );
     }

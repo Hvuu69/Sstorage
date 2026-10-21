@@ -30,7 +30,7 @@ public class AuthService {
         Authentication authentication =
                 authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(
-                        request.username(),
+                        request.email().trim(),
                         request.password()
                     )
                 );
@@ -39,8 +39,8 @@ public class AuthService {
 
         String token = jwtService.generateToken(user);
 
-        var roles = user.getRoles().stream()
-                .map(Enum::name)
+        var roles = user.getAuthorities().stream()
+                .map(authority -> authority.getAuthority().replaceFirst("^ROLE_", ""))
                 .collect(Collectors.toSet());
 
         return new LoginResponse(

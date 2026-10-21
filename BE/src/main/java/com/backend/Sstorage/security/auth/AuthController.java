@@ -22,15 +22,15 @@ public class AuthController {
     public ResponseEntity<?> login(
             @RequestBody LoginRequest request) {
 
-        if (request.username() == null
-                || request.username().isBlank()
+        if (request.email() == null
+                || request.email().isBlank()
                 || request.password() == null
                 || request.password().isBlank()) {
 
             return ResponseEntity.badRequest().body(
                 Map.of(
                     "message",
-                    "Vui lòng nhập username và password"
+                    "Vui lòng nhập email và mật khẩu"
                 )
             );
         }
