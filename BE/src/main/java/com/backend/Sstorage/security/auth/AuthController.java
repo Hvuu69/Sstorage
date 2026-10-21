@@ -1,3 +1,4 @@
+
 package com.backend.Sstorage.security.auth;
 
 import org.springframework.http.HttpStatus;
@@ -27,18 +28,24 @@ public class AuthController {
                 || request.password().isBlank()) {
 
             return ResponseEntity.badRequest().body(
-                Map.of("message", "Vui lòng nhập username và password")
+                Map.of(
+                    "message",
+                    "Vui lòng nhập username và password"
+                )
             );
         }
 
         try {
-            return ResponseEntity.ok(authService.login(request));
+            return ResponseEntity.ok(
+                authService.login(request)
+            );
         } catch (AuthenticationException ex) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(Map.of(
-                        "message",
-                        "Tên đăng nhập hoặc mật khẩu không đúng"
-                    ));
+            return ResponseEntity
+                .status(HttpStatus.UNAUTHORIZED)
+                .body(Map.of(
+                    "message",
+                    "Tên đăng nhập hoặc mật khẩu không đúng"
+                ));
         }
     }
 }

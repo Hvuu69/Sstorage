@@ -1,11 +1,11 @@
+
 package com.backend.Sstorage.security.auth;
 
 import com.backend.Sstorage.security.jwt.JwtService;
 import com.backend.Sstorage.security.user.AppUser;
 
 import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication
-        .UsernamePasswordAuthenticationToken;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 
@@ -20,6 +20,7 @@ public class AuthService {
     public AuthService(
             AuthenticationManager authenticationManager,
             JwtService jwtService) {
+
         this.authenticationManager = authenticationManager;
         this.jwtService = jwtService;
     }
