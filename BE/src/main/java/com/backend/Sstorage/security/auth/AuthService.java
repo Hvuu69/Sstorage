@@ -46,9 +46,14 @@ public class AuthService {
         return new LoginResponse(
                 token,
                 "Bearer",
-                900,
+                jwtService.getExpirationSeconds(),
                 user.getUsername(),
-                roles
+                roles,
+                user.getId(),
+                user.getUsername(),
+                user.getFullName(),
+                user.getRole().getCode().name(),
+                user.getDealerId()
         );
     }
 }
