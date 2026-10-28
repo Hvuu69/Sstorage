@@ -126,6 +126,9 @@ public class SecurityConfig {
                     "/api/auth/login"
                 ).permitAll()
 
+                .requestMatchers("/api/v1/admin/**")
+                    .hasRole("ADMIN")
+
                 .requestMatchers("/api/admin/**")
                     .hasRole("ADMIN")
 
