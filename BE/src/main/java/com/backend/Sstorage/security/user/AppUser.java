@@ -81,6 +81,21 @@ public class AppUser implements UserDetails {
         return status;
     }
 
+    public void updateAccount(UserRole role, UUID dealerId, String fullName, String email) {
+        this.role = role;
+        this.dealerId = dealerId;
+        this.fullName = fullName;
+        this.email = email;
+    }
+
+    public void changeStatus(UserStatus status) {
+        this.status = status;
+    }
+
+    public void changePassword(String passwordHash) {
+        this.passwordHash = passwordHash;
+    }
+
     @Override
     public String getUsername() {
         return email;

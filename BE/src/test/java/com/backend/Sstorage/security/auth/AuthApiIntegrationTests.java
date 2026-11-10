@@ -1,5 +1,6 @@
 package com.backend.Sstorage.security.auth;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.backend.Sstorage.security.user.AppUser;
 import com.backend.Sstorage.security.user.Role;
 import com.backend.Sstorage.security.user.UserRepository;
@@ -17,6 +18,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -37,6 +39,9 @@ class AuthApiIntegrationTests {
 
     @Autowired
     private PasswordEncoder passwordEncoder;
+
+    @Autowired
+    private ObjectMapper objectMapper;
 
     private UserRole managerRole;
 
@@ -61,8 +66,40 @@ class AuthApiIntegrationTests {
                 .andExpect(jsonPath("$.tokenType").value("Bearer"))
                 .andExpect(jsonPath("$.username").value("manager@example.com"))
                 .andExpect(jsonPath("$.roles[0]").value("WAREHOUSE_MANAGER"))
+                .andExpect(jsonPath("$.email").value("manager@example.com"))
+                .andExpect(jsonPath("$.fullName").value("Test Manager"))
+                .andExpect(jsonPath("$.role").value("WAREHOUSE_MANAGER"))
+                .andExpect(jsonPath("$.userId").isNotEmpty())
+                .andExpect(jsonPath("$.expiresIn").value(900))
                 .andExpect(jsonPath("$.password").doesNotExist())
                 .andExpect(jsonPath("$.passwordHash").doesNotExist());
+    }
+
+    @Test
+    void authenticatedUserCanRestoreTheirSessionProfile() throws Exception {
+        AppUser user = saveUser("manager@example.com", "Demo@123456", UserStatus.ACTIVE);
+        String loginJson = mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"manager@example.com","password":"Demo@123456"}
+                                """))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        String token = objectMapper.readTree(loginJson).get("accessToken").asText();
+
+        mockMvc.perform(get("/api/auth/me").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.userId").value(user.getId().toString()))
+                .andExpect(jsonPath("$.email").value("manager@example.com"))
+                .andExpect(jsonPath("$.fullName").value("Test Manager"))
+                .andExpect(jsonPath("$.role").value("WAREHOUSE_MANAGER"))
+                .andExpect(jsonPath("$.passwordHash").doesNotExist());
+    }
+
+    @Test
+    void sessionProfileRequiresAValidToken() throws Exception {
+        mockMvc.perform(get("/api/auth/me"))
+                .andExpect(status().isUnauthorized());
     }
 
     @Test
@@ -112,8 +149,8 @@ class AuthApiIntegrationTests {
         assertLoginIsUnauthorized("disabled@example.com");
     }
 
-    private void saveUser(String email, String rawPassword, UserStatus status) {
-        userRepository.save(new AppUser(
+    private AppUser saveUser(String email, String rawPassword, UserStatus status) {
+        return userRepository.save(new AppUser(
                 managerRole,
                 null,
                 "Test Manager",
