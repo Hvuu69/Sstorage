@@ -37,14 +37,6 @@ public class JwtService {
         this.expiration = expiration;
     }
 
-    /**
-     * Trả thời hạn token theo giây để AuthService
-     * thông báo đúng cho Frontend.
-     */
-    public long getExpirationSeconds() {
-        return Math.max(1L, expiration / 1000L);
-    }
-
     public String generateToken(UserDetails user) {
 
         Map<String, Object> claims = new HashMap<>();
@@ -70,8 +62,12 @@ public class JwtService {
                 .compact();
     }
 
+    /**
+     * Trả thời hạn token theo giây, làm tròn lên để
+     * AuthService thông báo đúng cho Frontend.
+     */
     public long getExpirationSeconds() {
-        return (expiration + 999) / 1000;
+        return 1L + (expiration - 1L) / 1000L;
     }
 
     public String extractUsername(String token) {
