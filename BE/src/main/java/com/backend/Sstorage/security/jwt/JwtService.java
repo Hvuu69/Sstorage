@@ -22,22 +22,39 @@ public class JwtService {
 
     public JwtService(
             @Value("${app.jwt.secret}") String secret,
-            @Value("${app.jwt.expiration-ms:900000}") long expiration) {
+            @Value("${app.jwt.expiration-ms:28800000}") long expiration) {
+
+        if (expiration <= 0) {
+            throw new IllegalArgumentException(
+                    "JWT expiration must be greater than zero."
+            );
+        }
 
         this.secretKey = Keys.hmacShaKeyFor(
                 Decoders.BASE64.decode(secret)
         );
+
         this.expiration = expiration;
     }
 
+    /**
+     * Trả thời hạn token theo giây để AuthService
+     * thông báo đúng cho Frontend.
+     */
+    public long getExpirationSeconds() {
+        return Math.max(1L, expiration / 1000L);
+    }
+
     public String generateToken(UserDetails user) {
+
         Map<String, Object> claims = new HashMap<>();
 
         claims.put(
-            "roles",
-            user.getAuthorities().stream()
-                .map(authority -> authority.getAuthority())
-                .toList()
+                "roles",
+                user.getAuthorities()
+                        .stream()
+                        .map(authority -> authority.getAuthority())
+                        .toList()
         );
 
         Date now = new Date();
@@ -46,7 +63,9 @@ public class JwtService {
                 .claims(claims)
                 .subject(user.getUsername())
                 .issuedAt(now)
-                .expiration(new Date(now.getTime() + expiration))
+                .expiration(
+                        new Date(now.getTime() + expiration)
+                )
                 .signWith(secretKey)
                 .compact();
     }
@@ -62,8 +81,10 @@ public class JwtService {
         String username = extractUsername(token);
 
         return username.equals(userDetails.getUsername())
-                && extractClaim(token, Claims::getExpiration)
-                    .after(new Date());
+                && extractClaim(
+                token,
+                Claims::getExpiration
+        ).after(new Date());
     }
 
     private <T> T extractClaim(

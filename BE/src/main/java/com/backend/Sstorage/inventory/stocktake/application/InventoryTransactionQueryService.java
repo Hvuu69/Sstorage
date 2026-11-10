@@ -1,9 +1,11 @@
+
 package com.backend.Sstorage.inventory.stocktake.application;
 
 import com.backend.Sstorage.common.error.InvalidRequestException;
 import com.backend.Sstorage.inventory.stocktake.api.dto.InventoryTransactionResponse;
 import com.backend.Sstorage.inventory.stocktake.domain.InventoryTransactionSource;
 import com.backend.Sstorage.inventory.stocktake.infrastructure.InventoryTransactionRepository;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -33,6 +35,7 @@ public class InventoryTransactionQueryService {
             OffsetDateTime to,
             Pageable pageable
     ) {
+
         if (from != null && to != null && from.isAfter(to)) {
             throw new InvalidRequestException(
                     "INVALID_DATE_RANGE",
@@ -40,15 +43,13 @@ public class InventoryTransactionQueryService {
             );
         }
 
-        String normalizedSearch = (
+        String normalizedSearch =
                 search == null || search.isBlank()
-        )
-                ? null
-                : search.trim().toLowerCase(Locale.ROOT);
+                        ? null
+                        : search.trim().toLowerCase(Locale.ROOT);
 
-        String sourceName = source == null
-                ? null
-                : source.name();
+        String sourceName =
+                source == null ? null : source.name();
 
         return repository.search(
                 productId,

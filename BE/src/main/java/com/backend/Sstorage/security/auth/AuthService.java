@@ -1,4 +1,3 @@
-
 package com.backend.Sstorage.security.auth;
 
 import com.backend.Sstorage.security.jwt.JwtService;
@@ -29,24 +28,28 @@ public class AuthService {
 
         Authentication authentication =
                 authenticationManager.authenticate(
-                    new UsernamePasswordAuthenticationToken(
-                        request.email().trim(),
-                        request.password()
-                    )
+                        new UsernamePasswordAuthenticationToken(
+                                request.email().trim(),
+                                request.password()
+                        )
                 );
 
         AppUser user = (AppUser) authentication.getPrincipal();
 
         String token = jwtService.generateToken(user);
 
-        var roles = user.getAuthorities().stream()
-                .map(authority -> authority.getAuthority().replaceFirst("^ROLE_", ""))
+        var roles = user.getAuthorities()
+                .stream()
+                .map(authority ->
+                        authority.getAuthority()
+                                .replaceFirst("^ROLE_", "")
+                )
                 .collect(Collectors.toSet());
 
         return new LoginResponse(
                 token,
                 "Bearer",
-                900,
+                jwtService.getExpirationSeconds(),
                 user.getUsername(),
                 roles
         );
