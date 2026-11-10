@@ -40,6 +40,18 @@ public class InventoryBalance {
         this.quantityOnHand = 0;
     }
 
+    // ==========================================
+    // BỔ SUNG 2 HÀM NÀY ĐỂ PHỤC VỤ NHẬP/XUẤT KHO
+    // ==========================================
+    public void add(long quantity) {
+        this.quantityOnHand += quantity;
+    }
+
+    public void subtract(long quantity) {
+        this.quantityOnHand -= quantity;
+    }
+    // ==========================================
+
     public UUID getProductId() { return productId; }
     public long getQuantityOnHand() { return quantityOnHand; }
     public OffsetDateTime getUpdatedAt() { return updatedAt; }

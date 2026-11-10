@@ -1,5 +1,5 @@
 package com.backend.Sstorage.product.application;
-
+import com.backend.Sstorage.product.infrastructure.InventoryBalanceRepository;
 import com.backend.Sstorage.category.domain.Category;
 import com.backend.Sstorage.category.infrastructure.CategoryRepository;
 import com.backend.Sstorage.common.audit.AuditEvent;
@@ -14,10 +14,8 @@ import com.backend.Sstorage.product.api.dto.ProductCreateRequest;
 import com.backend.Sstorage.product.api.dto.ProductInternalResponse;
 import com.backend.Sstorage.product.api.dto.ProductStatusRequest;
 import com.backend.Sstorage.product.api.dto.ProductUpdateRequest;
-import com.backend.Sstorage.product.domain.InventoryBalance;
 import com.backend.Sstorage.product.domain.Product;
 import com.backend.Sstorage.product.domain.ProductStatus;
-import com.backend.Sstorage.product.infrastructure.InventoryBalanceRepository;
 import com.backend.Sstorage.product.infrastructure.ProductRepository;
 import com.backend.Sstorage.unit.domain.Unit;
 import com.backend.Sstorage.unit.infrastructure.UnitRepository;
@@ -26,6 +24,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.backend.Sstorage.product.domain.InventoryBalance;
 
 import java.util.LinkedHashMap;
 import java.util.Map;

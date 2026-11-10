@@ -2,6 +2,7 @@ package com.backend.Sstorage.product.domain;
 
 import com.backend.Sstorage.category.domain.Category;
 import com.backend.Sstorage.unit.domain.Unit;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -27,10 +28,12 @@ public class Product {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "category_id", nullable = false)
+    @JsonIgnore
     private Category category;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "unit_id", nullable = false)
+    @JsonIgnore
     private Unit unit;
 
     @Column(nullable = false, unique = true, length = 60)
@@ -86,4 +89,23 @@ public class Product {
     public ProductStatus getStatus() { return status; }
     public OffsetDateTime getCreatedAt() { return createdAt; }
     public OffsetDateTime getUpdatedAt() { return updatedAt; }
+
+    // ==========================================
+    // ✅ Bọc try-catch để chống lỗi Lazy Load sập API
+    // ==========================================
+    public String getCategoryName() {
+        try {
+            return this.category != null ? this.category.getName() : null;
+        } catch (Exception e) {
+            return null; // Trả về null nếu session đã đóng không lấy được dữ liệu
+        }
+    }
+
+    public String getUnitSymbol() {
+        try {
+            return this.unit != null ? this.unit.getSymbol() : null;
+        } catch (Exception e) {
+            return null; // Trả về null nếu session đã đóng
+        }
+    }
 }
