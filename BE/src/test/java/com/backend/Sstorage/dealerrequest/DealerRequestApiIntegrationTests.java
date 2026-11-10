@@ -9,10 +9,8 @@ import com.backend.Sstorage.dealerrequest.domain.StockRequest;
 import com.backend.Sstorage.dealerrequest.domain.StockRequestStatus;
 import com.backend.Sstorage.dealerrequest.infrastructure.StockRequestItemRepository;
 import com.backend.Sstorage.dealerrequest.infrastructure.StockRequestRepository;
-import com.backend.Sstorage.product.domain.InventoryBalance;
 import com.backend.Sstorage.product.domain.Product;
 import com.backend.Sstorage.product.domain.ProductStatus;
-import com.backend.Sstorage.product.infrastructure.InventoryBalanceRepository;
 import com.backend.Sstorage.product.infrastructure.ProductRepository;
 import com.backend.Sstorage.security.user.AppUser;
 import com.backend.Sstorage.security.user.Role;
@@ -48,6 +46,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import com.backend.Sstorage.product.domain.InventoryBalance;
+import com.backend.Sstorage.product.infrastructure.InventoryBalanceRepository;
 
 @SpringBootTest
 @AutoConfigureMockMvc

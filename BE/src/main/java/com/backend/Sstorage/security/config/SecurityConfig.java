@@ -1,4 +1,3 @@
-
 package com.backend.Sstorage.security.config;
 
 import com.backend.Sstorage.security.jwt.JwtAuthenticationFilter;
@@ -99,52 +98,70 @@ public class SecurityConfig {
             throws Exception {
 
         http
-            .cors(Customizer.withDefaults())
-            .csrf(csrf -> csrf.disable())
+                .cors(Customizer.withDefaults())
+                .csrf(csrf -> csrf.disable())
 
-            .sessionManagement(session ->
-                session.sessionCreationPolicy(
-                    SessionCreationPolicy.STATELESS
+                .sessionManagement(session ->
+                        session.sessionCreationPolicy(
+                                SessionCreationPolicy.STATELESS
+                        )
                 )
-            )
 
-            .exceptionHandling(exceptions -> exceptions
-                .authenticationEntryPoint((request, response, exception) -> {
-                    response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-                    response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-                    response.getWriter().write(
-                        "{\"message\":\"Yêu cầu cần được xác thực\"}"
-                    );
-                })
-            )
+                .exceptionHandling(exceptions -> exceptions
+                        .authenticationEntryPoint((request, response, exception) -> {
+                            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+                            response.getWriter().write(
+                                    "{\"message\":\"Yêu cầu cần được xác thực\"}"
+                            );
+                        })
+                )
 
-            .authenticationProvider(authenticationProvider)
+                .authenticationProvider(authenticationProvider)
 
-            .authorizeHttpRequests(auth -> auth
-                .requestMatchers(
-                    HttpMethod.POST,
-                    "/api/auth/login"
-                ).permitAll()
+                .authorizeHttpRequests(auth -> auth
+                        // ✅ ĐẶC BIỆT QUAN TRỌNG: Cho phép tất cả request OPTIONS (Preflight) đi qua
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
-                .requestMatchers("/api/v1/admin/**")
-                    .hasRole("ADMIN")
+                        // 1. API đăng nhập được phép truy cập tự do
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/auth/login"
+                        ).permitAll()
 
-                .requestMatchers("/api/admin/**")
-                    .hasRole("ADMIN")
+                        // 2. Các API dành riêng cho ADMIN
+                        .requestMatchers("/api/admin/**")
+                        .hasRole("ADMIN")
 
-                .requestMatchers("/api/warehouse/**")
-                    .hasAnyRole("ADMIN", "WAREHOUSE_STAFF")
+                        // 3. API kho bãi (cũ)
+                        .requestMatchers("/api/warehouse/**")
+                        .hasAnyRole("ADMIN", "WAREHOUSE_STAFF", "WAREHOUSE_MANAGER")
 
-                .requestMatchers("/api/manager/**")
-                    .hasRole("WAREHOUSE_MANAGER")
+                        // 4. API quản lý (cũ)
+                        .requestMatchers("/api/manager/**")
+                        .hasAnyRole("ADMIN", "WAREHOUSE_MANAGER")
 
-                .anyRequest().authenticated()
-            )
+                        // 5. CÁC API MỚI (/api/v1/...)
+                        // 5.1. Nhập kho / Xuất kho
+                        .requestMatchers("/api/v1/imports/**", "/api/v1/exports/**")
+                        .hasAnyRole("ADMIN", "WAREHOUSE_MANAGER", "WAREHOUSE_STAFF")
 
-            .addFilterBefore(
-                jwtFilter,
-                UsernamePasswordAuthenticationFilter.class
-            );
+                        // 5.2. Sản phẩm (ai đã đăng nhập cũng xem được, DEALER cũng cần xem)
+                        .requestMatchers("/api/v1/products/**")
+                        .hasAnyRole("ADMIN", "WAREHOUSE_MANAGER", "WAREHOUSE_STAFF", "DEALER")
+
+                        // 5.3. Danh mục & Đơn vị tính
+                        .requestMatchers("/api/v1/categories/**", "/api/v1/units/**")
+                        .hasAnyRole("ADMIN", "WAREHOUSE_MANAGER", "WAREHOUSE_STAFF", "DEALER")
+
+                        // 6. Các request khác vẫn phải đăng nhập
+                        .anyRequest().authenticated()
+                )
+
+                .addFilterBefore(
+                        jwtFilter,
+                        UsernamePasswordAuthenticationFilter.class
+                );
 
         return http.build();
     }

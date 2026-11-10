@@ -1,11 +1,12 @@
 package com.backend.Sstorage.product;
 
+
+import com.backend.Sstorage.product.domain.InventoryBalance;
+import com.backend.Sstorage.product.infrastructure.InventoryBalanceRepository;
 import com.backend.Sstorage.category.domain.Category;
 import com.backend.Sstorage.category.infrastructure.CategoryRepository;
 import com.backend.Sstorage.product.application.ProductReferencePort;
-import com.backend.Sstorage.product.domain.InventoryBalance;
 import com.backend.Sstorage.product.domain.Product;
-import com.backend.Sstorage.product.infrastructure.InventoryBalanceRepository;
 import com.backend.Sstorage.product.infrastructure.ProductRepository;
 import com.backend.Sstorage.unit.domain.Unit;
 import com.backend.Sstorage.unit.infrastructure.UnitRepository;
