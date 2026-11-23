@@ -10,6 +10,11 @@ import com.backend.Sstorage.product.domain.Product;
 import com.backend.Sstorage.product.infrastructure.ProductRepository;
 import com.backend.Sstorage.unit.domain.Unit;
 import com.backend.Sstorage.unit.infrastructure.UnitRepository;
+import com.backend.Sstorage.inventory.api.domain.Supplier;
+import com.backend.Sstorage.inventory.api.infrastructure.SupplierRepository;
+import com.backend.Sstorage.inventory.inbound.domain.SupplierProduct;
+import com.backend.Sstorage.inventory.inbound.domain.SupplierProductId;
+import com.backend.Sstorage.inventory.inbound.infrastructure.SupplierProductRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -28,6 +33,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -46,6 +54,8 @@ class ProductApiIntegrationTests {
     @Autowired InventoryBalanceRepository balanceRepository;
     @Autowired CategoryRepository categoryRepository;
     @Autowired UnitRepository unitRepository;
+    @Autowired SupplierRepository supplierRepository;
+    @MockitoSpyBean SupplierProductRepository supplierProductRepository;
     @MockitoBean ProductReferencePort referencePort;
 
     private Category category;
@@ -72,6 +82,7 @@ class ProductApiIntegrationTests {
                 .andExpect(status().isCreated())
                 .andExpect(header().string("Location", org.hamcrest.Matchers.matchesPattern("/api/v1/products/.+")))
                 .andExpect(jsonPath("$.sku").value("SP-001"))
+                .andExpect(jsonPath("$.suppliers.length()").value(0))
                 .andExpect(jsonPath("$.quantityOnHand").value(0));
 
         Product product = productRepository.findAll().get(0);
@@ -203,11 +214,107 @@ class ProductApiIntegrationTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalElements").value(1))
                 .andExpect(jsonPath("$.content[0].id").value(active.getId().toString()))
+                .andExpect(jsonPath("$.content[0].suppliers").doesNotExist())
                 .andExpect(jsonPath("$.content[0].quantityOnHand").doesNotExist());
+
+        mockMvc.perform(get("/api/v1/products").with(user("dealer").roles("DEALER"))
+                        .param("supplierId", UUID.randomUUID().toString()))
+                .andExpect(status().isForbidden());
 
         mockMvc.perform(get("/api/v1/products/{id}", inactive.getId())
                         .with(user("dealer").roles("DEALER")))
                 .andExpect(status().isNotFound());
+
+        mockMvc.perform(get("/api/v1/suppliers")
+                        .with(user("dealer").roles("DEALER")))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void managerCreatesWithMultipleSuppliersAndListUsesOneBatchForSupplierMetadata() throws Exception {
+        Supplier first = supplier("NCC-A", "Nhà cung cấp A", true);
+        Supplier second = supplier("NCC-B", "Nhà cung cấp B", true);
+
+        mockMvc.perform(post("/api/v1/products")
+                        .with(user("manager").roles("WAREHOUSE_MANAGER"))
+                        .contentType("application/json")
+                        .content(productJson("SP-MULTI", "Sản phẩm nhiều NCC", first.getId(), second.getId())))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.suppliers.length()").value(2));
+
+        clearInvocations(supplierProductRepository);
+        mockMvc.perform(get("/api/v1/products")
+                        .with(user("manager").roles("WAREHOUSE_MANAGER")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].suppliers.length()").value(2))
+                .andExpect(jsonPath("$.content[0].suppliers[0].supplierStatus").value("ACTIVE"));
+        verify(supplierProductRepository, times(1)).findAllByProductIdIn(org.mockito.ArgumentMatchers.anyCollection());
+
+        Product product = productRepository.findAll().get(0);
+        mockMvc.perform(get("/api/v1/products/{id}", product.getId())
+                        .with(user("manager").roles("WAREHOUSE_MANAGER")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.suppliers.length()").value(2))
+                .andExpect(jsonPath("$.suppliers[0].supplierCode").exists())
+                .andExpect(jsonPath("$.suppliers[0].linkStatus").value("ACTIVE"));
+    }
+
+    @Test
+    void updateAddsDeactivatesAndReactivatesLinksWithoutChangingStock() throws Exception {
+        Product product = persistedProduct("SP-LINKS");
+        Supplier first = supplier("NCC-1", "Nhà cung cấp Một", true);
+        Supplier second = supplier("NCC-2", "Nhà cung cấp Hai", true);
+        supplierProductRepository.saveAndFlush(new SupplierProduct(first, product));
+
+        mockMvc.perform(put("/api/v1/products/{id}", product.getId())
+                        .with(user("manager").roles("WAREHOUSE_MANAGER"))
+                        .contentType("application/json")
+                        .content(updateJsonWithSuppliers("SP-LINKS", "Đã sửa", category.getId(), unit.getId(), second.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.suppliers[?(@.id == '" + second.getId() + "')].linkStatus").value("ACTIVE"));
+
+        SupplierProduct firstLink = supplierProductRepository.findById(new SupplierProductId(first.getId(), product.getId())).orElseThrow();
+        assertEquals(false, firstLink.isActive());
+        assertEquals(2, supplierProductRepository.count());
+
+        mockMvc.perform(put("/api/v1/products/{id}", product.getId())
+                        .with(user("manager").roles("WAREHOUSE_MANAGER"))
+                        .contentType("application/json")
+                        .content(updateJsonWithSuppliers("SP-LINKS", "Đã sửa", category.getId(), unit.getId(), first.getId(), second.getId())))
+                .andExpect(status().isOk());
+        assertEquals(true, supplierProductRepository.findById(new SupplierProductId(first.getId(), product.getId())).orElseThrow().isActive());
+        assertEquals(0, balanceRepository.findById(product.getId()).orElseThrow().getQuantityOnHand());
+    }
+
+    @Test
+    void inactiveSupplierCannotBeAssignedOrReactivatedAndInactiveLinkStillFilters() throws Exception {
+        Supplier supplier = supplier("NCC-OFF", "Nhà cung cấp ngừng", false);
+        mockMvc.perform(post("/api/v1/products")
+                        .with(user("manager").roles("WAREHOUSE_MANAGER"))
+                        .contentType("application/json")
+                        .content(productJson("SP-REJECT", "Sản phẩm", supplier.getId())))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("SUPPLIER_INACTIVE"));
+
+        Product product = persistedProduct("SP-HISTORY");
+        SupplierProduct inactiveLink = new SupplierProduct(supplier, product);
+        inactiveLink.changeStatus(false);
+        supplierProductRepository.saveAndFlush(inactiveLink);
+
+        mockMvc.perform(get("/api/v1/products")
+                        .with(user("manager").roles("WAREHOUSE_MANAGER"))
+                        .param("supplierId", supplier.getId().toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].suppliers[0].supplierStatus").value("INACTIVE"))
+                .andExpect(jsonPath("$.content[0].suppliers[0].linkStatus").value("INACTIVE"));
+
+        mockMvc.perform(put("/api/v1/products/{id}", product.getId())
+                        .with(user("manager").roles("WAREHOUSE_MANAGER"))
+                        .contentType("application/json")
+                        .content(updateJsonWithSuppliers("SP-HISTORY", "Sản phẩm", category.getId(), unit.getId(), supplier.getId())))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("SUPPLIER_INACTIVE"));
     }
 
     @Test
@@ -250,9 +357,27 @@ class ProductApiIntegrationTests {
                 """.formatted(sku, name, categoryId, unitId).trim();
     }
 
+    private Supplier supplier(String code, String name, boolean active) {
+        return supplierRepository.saveAndFlush(new Supplier(UUID.randomUUID(), code, name, active));
+    }
+
+    private String productJson(String sku, String name, UUID... supplierIds) {
+        return updateJsonWithSuppliers(sku, name, category.getId(), unit.getId(), supplierIds);
+    }
+
+    private String updateJsonWithSuppliers(String sku, String name, UUID categoryId, UUID unitId, UUID... supplierIds) {
+        String ids = java.util.Arrays.stream(supplierIds).map(id -> "\"" + id + "\"")
+                .collect(java.util.stream.Collectors.joining(","));
+        return """
+                {"sku":"%s","name":"%s","categoryId":"%s","unitId":"%s","description":"Mô tả","supplierIds":[%s]}
+                """.formatted(sku, name, categoryId, unitId, ids).trim();
+    }
+
     private void cleanDatabase() {
+        supplierProductRepository.deleteAll();
         balanceRepository.deleteAll();
         productRepository.deleteAll();
+        supplierRepository.deleteAll();
         categoryRepository.deleteAll();
         unitRepository.deleteAll();
     }

@@ -21,4 +21,7 @@ public interface ProductIdentifierRepository extends JpaRepository<ProductIdenti
     @EntityGraph(attributePaths = {"product"})
     Optional<ProductIdentifier> findFirstByProductIdAndTypeAndActiveTrueOrderByCreatedAtDesc(
             UUID productId, IdentifierType type);
+
+    @EntityGraph(attributePaths = {"product"})
+    Optional<ProductIdentifier> findFirstByProductIdAndActiveTrueOrderByCreatedAtDesc(UUID productId);
 }

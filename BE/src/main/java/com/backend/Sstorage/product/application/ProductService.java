@@ -1,5 +1,9 @@
 package com.backend.Sstorage.product.application;
 import com.backend.Sstorage.product.infrastructure.InventoryBalanceRepository;
+import com.backend.Sstorage.inventory.api.domain.Supplier;
+import com.backend.Sstorage.inventory.api.infrastructure.SupplierRepository;
+import com.backend.Sstorage.inventory.inbound.domain.SupplierProduct;
+import com.backend.Sstorage.inventory.inbound.infrastructure.SupplierProductRepository;
 import com.backend.Sstorage.category.domain.Category;
 import com.backend.Sstorage.category.infrastructure.CategoryRepository;
 import com.backend.Sstorage.common.audit.AuditEvent;
@@ -12,6 +16,7 @@ import com.backend.Sstorage.common.text.BusinessCodeNormalizer;
 import com.backend.Sstorage.product.api.dto.ProductCatalogResponse;
 import com.backend.Sstorage.product.api.dto.ProductCreateRequest;
 import com.backend.Sstorage.product.api.dto.ProductInternalResponse;
+import com.backend.Sstorage.product.api.dto.ProductSupplierResponse;
 import com.backend.Sstorage.product.api.dto.ProductStatusRequest;
 import com.backend.Sstorage.product.api.dto.ProductUpdateRequest;
 import com.backend.Sstorage.product.domain.Product;
@@ -27,7 +32,13 @@ import org.springframework.transaction.annotation.Transactional;
 import com.backend.Sstorage.product.domain.InventoryBalance;
 
 import java.util.LinkedHashMap;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -38,35 +49,42 @@ public class ProductService {
     private final CategoryRepository categoryRepository;
     private final UnitRepository unitRepository;
     private final InventoryBalanceRepository balanceRepository;
+    private final SupplierRepository supplierRepository;
+    private final SupplierProductRepository supplierProductRepository;
     private final ProductReferencePort referencePort;
     private final AuditPort auditPort;
     private final CurrentActorProvider actorProvider;
 
     public ProductService(ProductRepository productRepository, CategoryRepository categoryRepository,
                           UnitRepository unitRepository, InventoryBalanceRepository balanceRepository,
+                          SupplierRepository supplierRepository, SupplierProductRepository supplierProductRepository,
                           ProductReferencePort referencePort, AuditPort auditPort,
                           CurrentActorProvider actorProvider) {
         this.productRepository = productRepository;
         this.categoryRepository = categoryRepository;
         this.unitRepository = unitRepository;
         this.balanceRepository = balanceRepository;
+        this.supplierRepository = supplierRepository;
+        this.supplierProductRepository = supplierProductRepository;
         this.referencePort = referencePort;
         this.auditPort = auditPort;
         this.actorProvider = actorProvider;
     }
 
     @Transactional(readOnly = true)
-    public Page<ProductInternalResponse> listInternal(String search, UUID categoryId, ProductStatus status,
+    public Page<ProductInternalResponse> listInternal(String search, UUID categoryId, UUID supplierId, ProductStatus status,
                                                       Pageable pageable) {
-        Page<Product> products = productRepository.findAll(specification(search, categoryId, status), pageable);
+        Page<Product> products = productRepository.findAll(specification(search, categoryId, supplierId, status), pageable);
         Map<UUID, InventoryBalance> balances = balances(products);
+        Map<UUID, List<ProductSupplierResponse>> suppliers = supplierResponses(
+                products.getContent().stream().map(Product::getId).toList());
         return products.map(product -> ProductInternalResponse.from(product,
-                quantity(balances.get(product.getId()))));
+                quantity(balances.get(product.getId())), suppliers.getOrDefault(product.getId(), List.of())));
     }
 
     @Transactional(readOnly = true)
     public Page<ProductCatalogResponse> listCatalog(String search, UUID categoryId, Pageable pageable) {
-        return productRepository.findAll(specification(search, categoryId, ProductStatus.ACTIVE), pageable)
+        return productRepository.findAll(specification(search, categoryId, null, ProductStatus.ACTIVE), pageable)
                 .map(ProductCatalogResponse::from);
     }
 
@@ -74,7 +92,7 @@ public class ProductService {
     public ProductInternalResponse getInternal(UUID id) {
         Product product = findProduct(id);
         Long quantity = balanceRepository.findById(id).map(InventoryBalance::getQuantityOnHand).orElse(null);
-        return ProductInternalResponse.from(product, quantity);
+        return response(product, quantity);
     }
 
     @Transactional(readOnly = true)
@@ -95,8 +113,9 @@ public class ProductService {
         Product product = productRepository.saveAndFlush(new Product(category, unit, sku, request.name().trim(),
                 normalizeOptional(request.description())));
         balanceRepository.save(new InventoryBalance(product));
+        syncSuppliers(product, request.supplierIds());
         audit("PRODUCT_CREATED", product.getId(), null, snapshot(product));
-        return ProductInternalResponse.from(product, 0L);
+        return response(product, 0L);
     }
 
     @Transactional
@@ -117,10 +136,11 @@ public class ProductService {
         Unit unit = product.getUnit().getId().equals(request.unitId())
                 ? product.getUnit() : findUnit(request.unitId());
         product.update(category, unit, sku, request.name().trim(), normalizeOptional(request.description()));
+        if (request.supplierIds() != null) syncSuppliers(product, request.supplierIds());
         productRepository.flush();
         audit("PRODUCT_UPDATED", product.getId(), oldValues, snapshot(product));
         Long quantity = balanceRepository.findById(id).map(InventoryBalance::getQuantityOnHand).orElse(null);
-        return ProductInternalResponse.from(product, quantity);
+        return response(product, quantity);
     }
 
     @Transactional
@@ -131,10 +151,10 @@ public class ProductService {
         productRepository.flush();
         audit("PRODUCT_STATUS_CHANGED", product.getId(), oldValues, snapshot(product));
         Long quantity = balanceRepository.findById(id).map(InventoryBalance::getQuantityOnHand).orElse(null);
-        return ProductInternalResponse.from(product, quantity);
+        return response(product, quantity);
     }
 
-    private Specification<Product> specification(String search, UUID categoryId, ProductStatus status) {
+    private Specification<Product> specification(String search, UUID categoryId, UUID supplierId, ProductStatus status) {
         Specification<Product> result = (root, query, builder) -> builder.conjunction();
         if (search != null && !search.isBlank()) {
             String pattern = "%" + search.trim().toLowerCase() + "%";
@@ -145,6 +165,15 @@ public class ProductService {
         if (categoryId != null) {
             result = result.and((root, query, builder) ->
                     builder.equal(root.get("category").get("id"), categoryId));
+        }
+        if (supplierId != null) {
+            result = result.and((root, query, builder) -> {
+                var links = query.subquery(UUID.class);
+                var link = links.from(SupplierProduct.class);
+                links.select(link.get("product").get("id"))
+                        .where(builder.equal(link.get("supplier").get("id"), supplierId));
+                return root.get("id").in(links);
+            });
         }
         if (status != null) {
             result = result.and((root, query, builder) -> builder.equal(root.get("status"), status));
@@ -159,6 +188,49 @@ public class ProductService {
 
     private Long quantity(InventoryBalance balance) {
         return balance == null ? null : balance.getQuantityOnHand();
+    }
+
+    private ProductInternalResponse response(Product product, Long quantity) {
+        return ProductInternalResponse.from(product, quantity,
+                supplierProductRepository.findAllByProductId(product.getId()).stream()
+                        .map(ProductSupplierResponse::from).toList());
+    }
+
+    private Map<UUID, List<ProductSupplierResponse>> supplierResponses(Collection<UUID> productIds) {
+        if (productIds.isEmpty()) return Map.of();
+        Map<UUID, List<ProductSupplierResponse>> result = new HashMap<>();
+        for (SupplierProduct link : supplierProductRepository.findAllByProductIdIn(productIds)) {
+            result.computeIfAbsent(link.getProduct().getId(), ignored -> new ArrayList<>())
+                    .add(ProductSupplierResponse.from(link));
+        }
+        return result;
+    }
+
+    private void syncSuppliers(Product product, Set<UUID> requestedSupplierIds) {
+        Set<UUID> desired = requestedSupplierIds == null ? Set.of() : new HashSet<>(requestedSupplierIds);
+        List<SupplierProduct> existing = supplierProductRepository.findAllByProductId(product.getId());
+        Map<UUID, SupplierProduct> linksBySupplier = existing.stream().collect(Collectors.toMap(
+                link -> link.getSupplier().getId(), Function.identity()));
+        Map<UUID, Supplier> suppliers = supplierRepository.findAllById(desired).stream()
+                .collect(Collectors.toMap(Supplier::getId, Function.identity()));
+
+        for (UUID supplierId : desired) {
+            Supplier supplier = suppliers.get(supplierId);
+            if (supplier == null) {
+                throw new ResourceNotFoundException("SUPPLIER_NOT_FOUND", "Không tìm thấy nhà cung cấp " + supplierId + ".");
+            }
+            SupplierProduct link = linksBySupplier.get(supplierId);
+            boolean activatesLink = link == null || !link.isActive();
+            if (activatesLink && !supplier.isActive()) {
+                throw new InvalidRequestException("SUPPLIER_INACTIVE", "Không thể gán nhà cung cấp đã ngừng hoạt động.");
+            }
+            if (link == null) supplierProductRepository.save(new SupplierProduct(supplier, product));
+            else if (!link.isActive()) link.changeStatus(true);
+        }
+        existing.stream().filter(SupplierProduct::isActive)
+                .filter(link -> !desired.contains(link.getSupplier().getId()))
+                .forEach(link -> link.changeStatus(false));
+        supplierProductRepository.flush();
     }
 
     private Product findProduct(UUID id) {
@@ -204,6 +276,11 @@ public class ProductService {
         values.put("categoryId", product.getCategory().getId());
         values.put("unitId", product.getUnit().getId());
         values.put("status", product.getStatus());
+        values.put("supplierIds", supplierProductRepository.findAllByProductId(product.getId()).stream()
+                .filter(SupplierProduct::isActive)
+                .map(link -> link.getSupplier().getId().toString())
+                .sorted()
+                .toList());
         return values;
     }
 

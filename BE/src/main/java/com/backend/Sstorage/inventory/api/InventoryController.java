@@ -11,9 +11,6 @@ import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
 
 import java.util.UUID;
 
@@ -25,56 +22,6 @@ public class InventoryController {
 
     public InventoryController(InventoryVoucherService service) {
         this.service = service;
-    }
-
-    // ==========================================
-    // NHẬP KHO (IMPORTS)
-    // ==========================================
-
-    // ✅ Lấy danh sách phiếu nhập (Frontend gọi GET /api/v1/imports?page=0&size=100&sort=createdAt,desc)
-    @GetMapping("/imports")
-    @PreAuthorize("hasAnyRole('WAREHOUSE_MANAGER', 'WAREHOUSE_STAFF')")
-    public ResponseEntity<?> listImports(
-            @PageableDefault(size = 100, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
-    ) {
-        Page<InventoryVoucher> page = service.listVouchers(VoucherType.INBOUND, pageable);
-        return ResponseEntity.ok(page);
-    }
-
-    @PostMapping("/imports")
-    @PreAuthorize("hasAnyRole('WAREHOUSE_MANAGER', 'WAREHOUSE_STAFF')")
-    public ResponseEntity<?> createImport(@RequestBody CreateVoucherRequest request) {
-        InventoryVoucher voucher = service.createVoucher(
-                VoucherType.INBOUND,
-                request.partnerName(),
-                request.note(),
-                request.lines()
-        );
-        return ResponseEntity.ok(voucher);
-    }
-
-    @PostMapping("/imports/{id}/scan")
-    @PreAuthorize("hasAnyRole('WAREHOUSE_MANAGER', 'WAREHOUSE_STAFF')")
-    public ResponseEntity<InventoryVoucher> scanImport(
-            @PathVariable UUID id,
-            @Valid @RequestBody ScanVoucherRequest request
-    ) {
-        return ResponseEntity.ok(service.scanInbound(id, request.code()));
-    }
-
-    @PatchMapping("/imports/{id}/complete")
-    @PreAuthorize("hasAnyRole('WAREHOUSE_MANAGER', 'WAREHOUSE_STAFF')")
-    public ResponseEntity<?> completeImport(@PathVariable UUID id) {
-        service.completeVoucher(id);
-        return ResponseEntity.ok().build();
-    }
-
-    // ✅ Hủy phiếu nhập
-    @PatchMapping("/imports/{id}/cancel")
-    @PreAuthorize("hasAnyRole('WAREHOUSE_MANAGER', 'WAREHOUSE_STAFF')")
-    public ResponseEntity<?> cancelImport(@PathVariable UUID id) {
-        service.cancelVoucher(id);
-        return ResponseEntity.ok().build();
     }
 
     // ==========================================
@@ -118,9 +65,4 @@ public class InventoryController {
         return ResponseEntity.ok().build();
     }
 
-    public record ScanVoucherRequest(
-            @NotBlank(message = "Mã QR/RFID là bắt buộc.")
-            @Size(max = 255, message = "Mã QR/RFID tối đa 255 ký tự.")
-            String code
-    ) {}
 }

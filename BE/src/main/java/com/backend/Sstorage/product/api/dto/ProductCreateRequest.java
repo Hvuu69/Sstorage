@@ -3,7 +3,7 @@ package com.backend.Sstorage.product.api.dto;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
-
+import java.util.Set;
 import java.util.UUID;
 
 public record ProductCreateRequest(
@@ -15,6 +15,8 @@ public record ProductCreateRequest(
         String name,
         @NotNull(message = "Danh mục không được để trống.") UUID categoryId,
         @NotNull(message = "Đơn vị tính không được để trống.") UUID unitId,
-        String description
+        String description,
+        @Size(max = 100, message = "Không thể gán quá 100 nhà cung cấp.")
+        Set<@NotNull(message = "Nhà cung cấp không hợp lệ.") UUID> supplierIds
 ) {
 }

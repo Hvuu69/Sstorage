@@ -12,6 +12,7 @@ import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -41,15 +42,19 @@ public class ProductController {
     public PageResponse<?> list(
             @RequestParam(required = false) String search,
             @RequestParam(required = false) UUID categoryId,
+            @RequestParam(required = false) UUID supplierId,
             @RequestParam(required = false) ProductStatus status,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(defaultValue = "name,asc") String sort,
             Authentication authentication) {
         var pageable = PageRequestFactory.create(page, size, sort, ALLOWED_SORTS);
+        if (isDealer(authentication) && supplierId != null) {
+            throw new AccessDeniedException("Dealer không được lọc theo nhà cung cấp.");
+        }
         return isDealer(authentication)
                 ? PageResponse.from(service.listCatalog(search, categoryId, pageable))
-                : PageResponse.from(service.listInternal(search, categoryId, status, pageable));
+                : PageResponse.from(service.listInternal(search, categoryId, supplierId, status, pageable));
     }
 
     @GetMapping("/{id}")
