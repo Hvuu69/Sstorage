@@ -11,6 +11,9 @@ import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 
 import java.util.UUID;
 
@@ -48,6 +51,15 @@ public class InventoryController {
                 request.lines()
         );
         return ResponseEntity.ok(voucher);
+    }
+
+    @PostMapping("/imports/{id}/scan")
+    @PreAuthorize("hasAnyRole('WAREHOUSE_MANAGER', 'WAREHOUSE_STAFF')")
+    public ResponseEntity<InventoryVoucher> scanImport(
+            @PathVariable UUID id,
+            @Valid @RequestBody ScanVoucherRequest request
+    ) {
+        return ResponseEntity.ok(service.scanInbound(id, request.code()));
     }
 
     @PatchMapping("/imports/{id}/complete")
@@ -105,4 +117,10 @@ public class InventoryController {
         service.cancelVoucher(id);
         return ResponseEntity.ok().build();
     }
+
+    public record ScanVoucherRequest(
+            @NotBlank(message = "Mã QR/RFID là bắt buộc.")
+            @Size(max = 255, message = "Mã QR/RFID tối đa 255 ký tự.")
+            String code
+    ) {}
 }

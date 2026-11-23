@@ -65,6 +65,10 @@ public class VoucherLine {
     @JsonProperty("quantity")
     public int getQuantity() { return quantity; }
 
+    public void incrementQuantity() {
+        this.quantity = Math.addExact(this.quantity, 1);
+    }
+
     /**
      * Ẩn object Product gốc khỏi JSON để tránh lỗi LazyInitializationException
      * và giảm kích thước payload. Frontend chỉ cần name, sku, unit, quantity.
