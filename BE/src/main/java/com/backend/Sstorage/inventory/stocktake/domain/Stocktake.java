@@ -98,10 +98,10 @@ public class Stocktake {
         this.status = StocktakeStatus.RECOUNT_REQUIRED;
     }
 
-    // Lam moi snapshot khi bat dau kiem ke lai
-    public void refreshSnapshot(OffsetDateTime snapshotAt) {
+    // Lam moi snapshot neu ton kho da thay doi trong luc cho duyet.
+    public void refreshSnapshotForRecount(OffsetDateTime snapshotAt) {
         this.snapshotAt = snapshotAt;
-        this.status = StocktakeStatus.IN_PROGRESS;
+        this.status = StocktakeStatus.RECOUNT_REQUIRED;
     }
 
     // Quan ly phe duyet ket qua

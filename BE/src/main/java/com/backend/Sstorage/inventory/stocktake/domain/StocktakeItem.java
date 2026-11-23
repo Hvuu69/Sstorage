@@ -111,6 +111,21 @@ public class StocktakeItem {
         this.note = note;
     }
 
+    public void clearCount() {
+        this.actualQuantity = null;
+        this.countedBy = null;
+        this.countedAt = null;
+        this.note = null;
+    }
+
+    public void refreshSnapshot(long systemQuantity) {
+        if (systemQuantity < 0) {
+            throw new IllegalArgumentException("So luong tren he thong khong duoc am");
+        }
+        this.systemQuantity = systemQuantity;
+        clearCount();
+    }
+
     /**
      * Kiem tra da dem hay chua.
      */

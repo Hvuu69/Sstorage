@@ -11,6 +11,8 @@ import com.backend.Sstorage.common.error.ResourceNotFoundException;
 import com.backend.Sstorage.inventory.stocktake.domain.Stocktake;
 import com.backend.Sstorage.inventory.stocktake.domain.StocktakeItem;
 import com.backend.Sstorage.inventory.stocktake.domain.StocktakeStatus;
+import com.backend.Sstorage.inventory.stocktake.domain.InventoryTransaction;
+import com.backend.Sstorage.inventory.stocktake.infrastructure.InventoryTransactionRepository;
 import com.backend.Sstorage.inventory.stocktake.infrastructure.StocktakeRepository;
 import com.backend.Sstorage.inventory.stocktake.infrastructure.StocktakeItemRepository;
 
@@ -27,8 +29,6 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.data.domain.Sort;
-import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,8 +36,10 @@ import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 @Service
@@ -45,6 +47,7 @@ public class StocktakeService {
 
     private final StocktakeRepository stocktakeRepository;
     private final StocktakeItemRepository itemRepository;
+    private final InventoryTransactionRepository transactionRepository;
     private final ProductRepository productRepository;
     private final UserRepository userRepository;
     private final JdbcTemplate jdbcTemplate;
@@ -54,6 +57,7 @@ public class StocktakeService {
     public StocktakeService(
             StocktakeRepository stocktakeRepository,
             StocktakeItemRepository itemRepository,
+            InventoryTransactionRepository transactionRepository,
             ProductRepository productRepository,
             UserRepository userRepository,
             JdbcTemplate jdbcTemplate,
@@ -62,6 +66,7 @@ public class StocktakeService {
     ) {
         this.stocktakeRepository = stocktakeRepository;
         this.itemRepository = itemRepository;
+        this.transactionRepository = transactionRepository;
         this.productRepository = productRepository;
         this.userRepository = userRepository;
         this.jdbcTemplate = jdbcTemplate;
@@ -74,22 +79,38 @@ public class StocktakeService {
     // =====================================================
 
     @Transactional
-    public StocktakeSummary create(String note) {
+    public StocktakeSummary create(List<UUID> productIds, String note) {
 
         AppUser actor = currentUser();
 
-        requireRole(actor, Role.ADMIN, Role.WAREHOUSE_MANAGER);
+        requireRole(actor, Role.WAREHOUSE_MANAGER);
 
-        List<Product> products = productRepository.findAll(
-                (Specification<Product>) (root, query, cb) ->
-                        cb.equal(root.get("status"), ProductStatus.ACTIVE),
-                Sort.by(Sort.Direction.ASC, "id")
-        );
+        if (productIds == null || productIds.isEmpty()
+                || productIds.stream().anyMatch(Objects::isNull)) {
+            throw new InvalidRequestException(
+                    "STOCKTAKE_PRODUCTS_REQUIRED",
+                    "Phien kiem ke phai co it nhat mot san pham."
+            );
+        }
 
-        if (products.isEmpty()) {
-            throw new BusinessConflictException(
-                    "NO_ACTIVE_PRODUCTS",
-                    "Khong co san pham dang hoat dong de kiem ke."
+        LinkedHashSet<UUID> uniqueProductIds = new LinkedHashSet<>(productIds);
+        if (uniqueProductIds.size() != productIds.size()) {
+            throw new InvalidRequestException(
+                    "DUPLICATE_STOCKTAKE_PRODUCTS",
+                    "Danh sach san pham kiem ke bi trung."
+            );
+        }
+
+        List<Product> products = productRepository.findAllById(uniqueProductIds)
+                .stream()
+                .sorted(Comparator.comparing(Product::getId))
+                .toList();
+
+        if (products.size() != uniqueProductIds.size()
+                || products.stream().anyMatch(product -> product.getStatus() != ProductStatus.ACTIVE)) {
+            throw new InvalidRequestException(
+                    "INVALID_STOCKTAKE_PRODUCTS",
+                    "Mot hoac nhieu san pham khong ton tai hoac khong con hoat dong."
             );
         }
 
@@ -143,7 +164,6 @@ public class StocktakeService {
 
         requireRole(
                 actor,
-                Role.ADMIN,
                 Role.WAREHOUSE_MANAGER,
                 Role.WAREHOUSE_STAFF
         );
@@ -174,7 +194,6 @@ public class StocktakeService {
 
         requireRole(
                 actor,
-                Role.ADMIN,
                 Role.WAREHOUSE_MANAGER,
                 Role.WAREHOUSE_STAFF
         );
@@ -201,7 +220,7 @@ public class StocktakeService {
 
         AppUser actor = currentUser();
 
-        requireRole(actor, Role.ADMIN, Role.WAREHOUSE_MANAGER);
+        requireRole(actor, Role.WAREHOUSE_MANAGER);
 
         Stocktake stocktake = findSessionForUpdate(stocktakeId);
 
@@ -241,7 +260,6 @@ public class StocktakeService {
 
         requireRole(
                 actor,
-                Role.ADMIN,
                 Role.WAREHOUSE_MANAGER,
                 Role.WAREHOUSE_STAFF
         );
@@ -255,7 +273,8 @@ public class StocktakeService {
 
         Stocktake stocktake = findSessionForUpdate(stocktakeId);
 
-        if (stocktake.getStatus() != StocktakeStatus.IN_PROGRESS) {
+        if (stocktake.getStatus() != StocktakeStatus.IN_PROGRESS
+                && stocktake.getStatus() != StocktakeStatus.RECOUNT_REQUIRED) {
             throw new BusinessConflictException(
                     "STOCKTAKE_NOT_IN_PROGRESS",
                     "Phien kiem ke khong o trang thai dang kiem dem."
@@ -318,14 +337,14 @@ public class StocktakeService {
 
         requireRole(
                 actor,
-                Role.ADMIN,
                 Role.WAREHOUSE_MANAGER,
                 Role.WAREHOUSE_STAFF
         );
 
         Stocktake stocktake = findSessionForUpdate(stocktakeId);
 
-        if (stocktake.getStatus() != StocktakeStatus.IN_PROGRESS) {
+        if (stocktake.getStatus() != StocktakeStatus.IN_PROGRESS
+                && stocktake.getStatus() != StocktakeStatus.RECOUNT_REQUIRED) {
             throw new BusinessConflictException(
                     "STOCKTAKE_NOT_IN_PROGRESS",
                     "Chi phien dang kiem dem moi duoc gui."
@@ -370,7 +389,6 @@ public class StocktakeService {
 
         requireRole(
                 approver,
-                Role.ADMIN,
                 Role.WAREHOUSE_MANAGER
         );
 
@@ -443,8 +461,14 @@ public class StocktakeService {
         // khong duoc ghi de ton kho hien tai.
         if (staleSnapshot) {
 
-            stocktake.requireRecount();
+            OffsetDateTime refreshedAt = databaseNow();
+            for (StocktakeItem item : orderedItems) {
+                item.refreshSnapshot(currentQuantities.get(item.getProduct().getId()));
+            }
 
+            stocktake.refreshSnapshotForRecount(refreshedAt);
+
+            itemRepository.flush();
             stocktakeRepository.flush();
 
             audit(
@@ -488,21 +512,12 @@ public class StocktakeService {
             }
 
             // Chi tao ledger khi co chenh lech khac 0.
-            jdbcTemplate.update(
-                    """
-                    INSERT INTO public.inventory_transactions
-                    (
-                        product_id,
-                        stocktake_item_id,
-                        quantity_delta
-                    )
-                    VALUES (?, ?, ?)
-                    """,
-                    productId,
-                    item.getId(),
-                    difference
-            );
+            transactionRepository.save(new InventoryTransaction(
+                    item.getProduct(), item, difference
+            ));
         }
+
+        transactionRepository.flush();
 
         stocktake.complete(
                 approver,
@@ -521,82 +536,51 @@ public class StocktakeService {
     }
 
     // =====================================================
-    // 8. TAO LAI SNAPSHOT KHI CAN KIEM KE LAI
+    // 8. QUAN LY YEU CAU KIEM KE LAI
     // =====================================================
 
     @Transactional
-    public StocktakeSummary refreshRecount(UUID stocktakeId) {
+    public StocktakeSummary requestRecount(UUID stocktakeId) {
 
         AppUser actor = currentUser();
 
         requireRole(
                 actor,
-                Role.ADMIN,
                 Role.WAREHOUSE_MANAGER
         );
 
         Stocktake stocktake = findSessionForUpdate(stocktakeId);
 
         if (stocktake.getStatus()
-                != StocktakeStatus.RECOUNT_REQUIRED) {
+                != StocktakeStatus.PENDING_CONFIRMATION) {
 
             throw new BusinessConflictException(
-                    "STOCKTAKE_RECOUNT_NOT_REQUIRED",
-                    "Phien hien tai khong yeu cau kiem ke lai."
+                    "STOCKTAKE_NOT_PENDING",
+                    "Chi phien dang cho duyet moi co the yeu cau kiem ke lai."
             );
         }
 
-        List<StocktakeItem> oldItems =
+        List<StocktakeItem> items =
                 itemRepository.findAllByStocktakeId(stocktakeId);
 
-        if (oldItems.isEmpty()) {
+        if (items.isEmpty()) {
             throw new BusinessConflictException(
                     "EMPTY_STOCKTAKE",
                     "Khong co san pham de kiem ke lai."
             );
         }
 
-        List<StocktakeItem> orderedItems = oldItems.stream()
-                .sorted(
-                        Comparator.comparing(
-                                item -> item.getProduct().getId()
-                        )
-                )
-                .toList();
-
-        OffsetDateTime newSnapshotAt = databaseNow();
-
-        // Xoa cac dong cu va tao dong snapshot moi.
-        // Phien cu duoc giu lai, khong xoa phien.
-        itemRepository.deleteAllByStocktake_Id(stocktakeId);
-        itemRepository.flush();
-
-        List<StocktakeItem> newItems = new ArrayList<>();
-
-        for (StocktakeItem oldItem : orderedItems) {
-
-            Product product = oldItem.getProduct();
-
-            long quantity = lockAndReadBalance(product.getId());
-
-            newItems.add(
-                    new StocktakeItem(
-                            stocktake,
-                            product,
-                            quantity
-                    )
-            );
+        for (StocktakeItem item : items) {
+            item.clearCount();
         }
 
-        itemRepository.saveAll(newItems);
         itemRepository.flush();
-
-        stocktake.refreshSnapshot(newSnapshotAt);
+        stocktake.requireRecount();
 
         stocktakeRepository.flush();
 
         audit(
-                "STOCKTAKE_RECOUNT_STARTED",
+                "STOCKTAKE_RECOUNT_REQUIRED",
                 stocktake,
                 null
         );
@@ -615,7 +599,6 @@ public class StocktakeService {
 
         requireRole(
                 actor,
-                Role.ADMIN,
                 Role.WAREHOUSE_MANAGER
         );
 

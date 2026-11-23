@@ -43,13 +43,13 @@ public class StocktakeController {
     // =====================================================
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN','WAREHOUSE_MANAGER')")
+    @PreAuthorize("hasRole('WAREHOUSE_MANAGER')")
     public ResponseEntity<StocktakeService.StocktakeSummary> create(
             @Valid @RequestBody CreateStocktakeRequest request
     ) {
 
         StocktakeService.StocktakeSummary response =
-                service.create(request.note());
+                service.create(request.productIds(), request.note());
 
         return ResponseEntity
                 .created(URI.create(
@@ -66,7 +66,6 @@ public class StocktakeController {
     @GetMapping
     @PreAuthorize("""
             hasAnyRole(
-                'ADMIN',
                 'WAREHOUSE_MANAGER',
                 'WAREHOUSE_STAFF'
             )
@@ -85,7 +84,6 @@ public class StocktakeController {
     @GetMapping("/{id}")
     @PreAuthorize("""
             hasAnyRole(
-                'ADMIN',
                 'WAREHOUSE_MANAGER',
                 'WAREHOUSE_STAFF'
             )
@@ -102,7 +100,7 @@ public class StocktakeController {
     // =====================================================
 
     @PostMapping("/{id}/start")
-    @PreAuthorize("hasAnyRole('ADMIN','WAREHOUSE_MANAGER')")
+    @PreAuthorize("hasRole('WAREHOUSE_MANAGER')")
     public StocktakeService.StocktakeSummary start(
             @PathVariable UUID id
     ) {
@@ -117,7 +115,6 @@ public class StocktakeController {
     @PatchMapping("/{id}/items/{itemId}/count")
     @PreAuthorize("""
             hasAnyRole(
-                'ADMIN',
                 'WAREHOUSE_MANAGER',
                 'WAREHOUSE_STAFF'
             )
@@ -144,7 +141,6 @@ public class StocktakeController {
     @PostMapping("/{id}/submit")
     @PreAuthorize("""
             hasAnyRole(
-                'ADMIN',
                 'WAREHOUSE_MANAGER',
                 'WAREHOUSE_STAFF'
             )
@@ -161,7 +157,7 @@ public class StocktakeController {
     // =====================================================
 
     @PostMapping("/{id}/approve")
-    @PreAuthorize("hasAnyRole('ADMIN','WAREHOUSE_MANAGER')")
+    @PreAuthorize("hasRole('WAREHOUSE_MANAGER')")
     public StocktakeService.StocktakeSummary approve(
             @PathVariable UUID id
     ) {
@@ -174,11 +170,11 @@ public class StocktakeController {
     // =====================================================
 
     @PostMapping("/{id}/recount")
-    @PreAuthorize("hasAnyRole('ADMIN','WAREHOUSE_MANAGER')")
+    @PreAuthorize("hasRole('WAREHOUSE_MANAGER')")
     public StocktakeService.StocktakeSummary recount(
             @PathVariable UUID id
     ) {
-        return service.refreshRecount(id);
+        return service.requestRecount(id);
     }
 
     // =====================================================
@@ -187,7 +183,7 @@ public class StocktakeController {
     // =====================================================
 
     @PostMapping("/{id}/cancel")
-    @PreAuthorize("hasAnyRole('ADMIN','WAREHOUSE_MANAGER')")
+    @PreAuthorize("hasRole('WAREHOUSE_MANAGER')")
     public StocktakeService.StocktakeSummary cancel(
             @PathVariable UUID id
     ) {
@@ -195,28 +191,22 @@ public class StocktakeController {
     }
 
     // =====================================================
-    // 10. QUET QR/RFID TRONG PHIEN KIEM KE
-    // POST /api/v1/stocktakes/{id}/items/{itemId}/scan
+    // 10. NHAN DIEN SAN PHAM BANG QR/RFID/SKU (KHONG TU DONG DEM)
+    // POST /api/v1/stocktakes/{id}/identify
     // =====================================================
 
-    @PostMapping("/{id}/items/{itemId}/scan")
+    @PostMapping("/{id}/identify")
     @PreAuthorize("""
         hasAnyRole(
-            'ADMIN',
             'WAREHOUSE_MANAGER',
             'WAREHOUSE_STAFF'
         )
         """)
-    public StocktakeScanService.ScanResult scan(
+    public StocktakeScanService.IdentificationResult identify(
             @PathVariable UUID id,
-            @PathVariable UUID itemId,
             @Valid @RequestBody ScanRequest request
     ) {
-        return scanService.scan(
-                id,
-                itemId,
-                request.code()
-        );
+        return scanService.identify(id, request.code());
     }
 
     public record ScanRequest(
@@ -233,6 +223,10 @@ public class StocktakeController {
     // =====================================================
 
     public record CreateStocktakeRequest(
+
+            @NotNull(message = "Danh sach san pham la bat buoc.")
+            @Size(min = 1, max = 500, message = "Phien kiem ke phai co tu 1 den 500 san pham.")
+            List<@NotNull UUID> productIds,
 
             @Size(
                     max = 2000,
