@@ -12,6 +12,5 @@ public record UserUpdateRequest(
         @NotBlank @Size(max = 150) String fullName,
         @NotBlank @Email @Size(max = 254) String email,
         @NotNull Role role,
-        UUID dealerId,
-        @Size(max = 72) String newPassword
+        UUID dealerId
 ) {}

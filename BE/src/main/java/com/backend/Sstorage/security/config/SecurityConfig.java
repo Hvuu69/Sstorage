@@ -126,7 +126,8 @@ public class SecurityConfig {
                         // 1. API đăng nhập được phép truy cập tự do
                         .requestMatchers(
                                 HttpMethod.POST,
-                                "/api/auth/login"
+                                "/api/auth/login",
+                                "/api/auth/password-reset/**"
                         ).permitAll()
 
                         // 2. Các API dành riêng cho ADMIN

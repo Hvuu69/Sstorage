@@ -104,18 +104,8 @@ public class UserAdminService {
         ensureActiveAdminRemains(user, request.role(), user.getStatus());
         user.updateAccount(role, dealerId, request.fullName().trim(), email);
 
-        String newPassword = request.newPassword();
-        if (newPassword != null && !newPassword.isBlank()) {
-            if (newPassword.length() < 8) {
-                throw new InvalidRequestException("PASSWORD_TOO_SHORT", "Mật khẩu mới phải có ít nhất 8 ký tự.");
-            }
-            user.changePassword(passwordEncoder.encode(newPassword));
-        }
         userRepository.flush();
         audit("USER_UPDATED", user, oldValues, snapshot(user));
-        if (newPassword != null && !newPassword.isBlank()) {
-            audit("USER_PASSWORD_RESET", user, null, Map.of("passwordChanged", true));
-        }
         return UserAccountResponse.from(user);
     }
 
